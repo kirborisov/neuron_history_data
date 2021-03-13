@@ -3,6 +3,8 @@ import random
 import sys
 import os, psutil
 import time
+import history
+
 
 def decorator_duration(func):
     def wrapper():
@@ -14,10 +16,10 @@ def decorator_duration(func):
 if __name__ == '__main__':
     @decorator_duration
     def test_func():
-        history_ins = History()
+        history_ins = history.History()
         while True:
             score = random.random()
-            ex = np.random.randint(low=1, high=10, size=500)
+            ex = np.random.randint(low=1, high=100, size=100)
             if history_ins.set_history(ex, score) == False:
                 print('Кол-во дублей: {}'.format(history_ins.count_dupl))
                 break

@@ -4,6 +4,8 @@ import sys
 import json
 import numpy as np
 import os, psutil
+import gc
+from loguru import logger
 
 
 class History:
@@ -11,11 +13,15 @@ class History:
     history_arr = []
     score_dict = {}
     count_dupl = 0
-    limit_mem = 3.7 * 10**9
-    limit_mem_finish = 5.7 * 10**9
+
+    limit_mem = 3e9
+    limit_mem_finish = 5e9
+
     iteration = 0
     filepath_history = 'history_data.npy'
-    flag_dump = False
+    history_arr_size = 0
+
+    interval_display = 1e5
 
     def set_history(self, sequence:List, score:float) -> None:
         """
@@ -39,6 +45,7 @@ class History:
         else:
             self.score_dict[hash_sequence] = score
             self.history_arr.append(sequence)
+            self.history_arr_size += sequence.nbytes
 
     def is_it_dupe_sequence(self, sequence:List) -> bool:
         """
@@ -48,25 +55,33 @@ class History:
 
         проверяет, есть ли такая в истории. Если есть True если нет False
         """
-        if self.history_dict.get(hash_sequence):
+        if self.history_dict.get(self._generate_hash(sequence)):
             return True
         else:
             return False
 
     def save_history(self, filepath:str) -> None:
+        logger.info('Сохранение...')
         history_data = {
-                    'history_arr':self.history_arr,
-                    'score_dict':self.score_dict,
-                    'count_dupl':self.count_dupl,
-                   }
+                            'history_arr':self.history_arr,
+                            'score_dict':self.score_dict,
+                            'count_dupl':self.count_dupl,
+                        }
         np.save(filepath, history_data)
+        logger.info('Готово')
+        del(history_data)
+        gc.collect()
 
     def load_history(self, filepath:str) -> None:
        """ Загружает данные истории с диска. """
+       logger.info('Загрузка...')
        history_data = np.load(filepath, allow_pickle=True)[()]
        self.history_arr = history_data.get('history_arr')
        self.score_dict = history_data.get('score_dict')
        self.count_dupl = history_data.get('count_dupl')
+       logger.info('Готово...')
+       del(history_data)
+       gc.collect()
 
     def _generate_hash(self, sequence:List):
         """
@@ -93,14 +108,16 @@ class History:
         """
         self.iteration += 1
 
-        if self.iteration%10**4 == 0:
-            process = psutil.Process(os.getpid())
-            memory_current = process.memory_info().rss
-            print(f'Номер итерации: {self.iteration}')
-            if not self.flag_dump and memory_current > self.limit_mem:
-                self.save_history(self.filepath_history)
-                self.load_history(self.filepath_history)
-                self.flag_dump = True
+        # Порог 5 gb
+        if self.history_arr_size > self.limit_mem_finish:
+            return False
 
-            if memory_current > self.limit_mem_finish:
-                return False
+        # Порог 3 gb
+        if self.limit_mem and self.history_arr_size > self.limit_mem:
+            self.save_history(self.filepath_history)
+            self.load_history(self.filepath_history)
+            self.limit_mem = None
+
+
+        if self.iteration % self.interval_display == 0:
+            logger.debug(f'Номер итерации: {self.iteration}. ')
