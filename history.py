@@ -120,4 +120,4 @@ class History:
 
 
         if self.iteration % self.interval_display == 0:
-            logger.debug(f'Номер итерации: {self.iteration}. ')
+            logger.debug(f'Номер итерации: {self.iteration}. Память: {self.history_arr_size}')
